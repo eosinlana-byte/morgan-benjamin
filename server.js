@@ -1,0 +1,6 @@
+require('dotenv').config();
+const express=require('express');const path=require('path');const {Pool}=require('pg');
+const app=express();const port=process.env.PORT||3000;const pool=process.env.DATABASE_URL?new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}}):null;
+app.use(express.json());app.use(express.urlencoded({extended:true}));app.use(express.static(path.join(__dirname,'public')));
+app.post('/api/contact',async(req,res)=>{const {name,email,subject,message,type,eventDate,location}=req.body;if(!name||!email||!message)return res.status(400).json({ok:false,error:'Please complete the required fields.'});if(!pool)return res.json({ok:true,note:'Form is not connected to email yet.'});try{await pool.query(`CREATE TABLE IF NOT EXISTS kairo_messages(id SERIAL PRIMARY KEY,name TEXT,email TEXT,subject TEXT,message TEXT,type TEXT,event_date TEXT,location TEXT,created_at TIMESTAMPTZ DEFAULT NOW())`);await pool.query('INSERT INTO kairo_messages(name,email,subject,message,type,event_date,location) VALUES($1,$2,$3,$4,$5,$6,$7)',[name,email,subject||'',message,type||'',eventDate||'',location||'']);res.json({ok:true});}catch(e){console.error(e);res.status(500).json({ok:false,error:'Message could not be saved.'});}});
+app.listen(port,'0.0.0.0',()=>console.log(`Kairo James site listening on ${port}`));
