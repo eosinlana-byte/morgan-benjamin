@@ -1,0 +1,44 @@
+body {
+  margin: 0;
+  background: #0b0b0b;
+  color: #ead9b8;
+  font-family: Georgia, serif;
+}
+#login {
+  max-width: 320px;
+  margin: 18vh auto;
+  display: grid;
+  gap: 10px;
+}
+#login h1 { letter-spacing: 0.3em; font-weight: 500; font-size: 18px; }
+input, textarea, select {
+  background: #141414;
+  border: 1px solid #3a3428;
+  color: #ead9b8;
+  padding: 10px;
+  font: inherit;
+  width: 100%;
+}
+button {
+  background: #ead9b8;
+  color: #111;
+  border: 0;
+  padding: 10px 14px;
+  cursor: pointer;
+  font: inherit;
+}
+header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid #3a3428;
+  flex-wrap: wrap;
+}
+header nav { display: flex; gap: 8px; flex-wrap: wrap; }
+header nav button { background: transparent; color: #ead9b8; border: 1px solid #3a3428; }
+main { padding: 18px; }
+.row { border: 1px solid #3a3428; padding: 12px; margin-bottom: 10px; }
+.form { display: grid; gap: 8px; max-width: 560px; margin-bottom: 24px; }
+.ok { color: #c4b08a; }
+.error { color: #c45c4a; }
