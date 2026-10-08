@@ -1,9 +1,328 @@
-require('dotenv').config();const express=require('express');const crypto=require('crypto');const path=require('path');const{Pool}=require('pg');const app=express();const port=process.env.PORT||3000;const pool=process.env.DATABASE_URL?new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}}):null;app.use(express.json({limit:'10mb'}));app.use(express.urlencoded({extended:true}));app.use(express.static(path.join(__dirname,'public')));
-async function db(){if(!pool)return;await pool.query('CREATE TABLE IF NOT EXISTS morgan_messages(id SERIAL PRIMARY KEY,name TEXT,email TEXT,subject TEXT,message TEXT,created_at TIMESTAMPTZ DEFAULT NOW())');await pool.query('CREATE TABLE IF NOT EXISTS morgan_releases(id SERIAL PRIMARY KEY,title TEXT NOT NULL,kind TEXT,year TEXT,image TEXT)');await pool.query('CREATE TABLE IF NOT EXISTS morgan_services(id SERIAL PRIMARY KEY,title TEXT NOT NULL,description TEXT)');await pool.query('CREATE TABLE IF NOT EXISTS morgan_testimonials(id SERIAL PRIMARY KEY,client TEXT,quote TEXT,image TEXT)');}
-const token=()=>crypto.createHmac('sha256',process.env.ADMIN_PASSWORD||'missing').update('morgan-admin').digest('hex');const authed=req=>String(req.headers.cookie||'').includes('morgan_admin='+token());const esc=v=>String(v||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const login=()=>`<!doctype html><html><head><meta name="viewport" content="width=device-width"><title>Morgan Benjamin Admin</title><style>body{margin:0;background:#101010;color:#f5ebdd;font:16px Arial;display:grid;place-items:center;min-height:100vh}.box{width:min(400px,calc(100% - 40px));padding:30px;background:#181818;border:1px solid #d4af37}label{display:grid;gap:7px;margin:16px 0}input{padding:12px;background:#101010;color:white;border:1px solid #555}button{padding:12px 18px;background:#d4af37;border:0;font-weight:bold}</style></head><body><form class="box" method="post" action="/admin/login"><h1>Morgan Benjamin</h1><p>Admin login</p><label>Username<input name="username" required></label><label>Password<input type="password" name="password" required></label><button>Sign in</button></form></body></html>`;
-app.get('/admin',(req,res)=>{if(!authed(req))return res.send(login());res.sendFile(path.join(__dirname,'public','admin.html'));});app.post('/admin/login',(req,res)=>{if(String(req.body.username).trim().toLowerCase()==='admin'&&String(req.body.password).trim()===String(process.env.ADMIN_PASSWORD||'').trim()){res.setHeader('Set-Cookie',`morgan_admin=${token()}; Path=/; HttpOnly; SameSite=Lax; Max-Age=86400`);return res.redirect('/admin')}res.status(401).send(login())});app.post('/admin/logout',(req,res)=>{res.setHeader('Set-Cookie','morgan_admin=; Path=/; Max-Age=0');res.redirect('/admin')});
-app.post('/api/contact',async(req,res)=>{const{name,email,subject,message}=req.body;if(!name||!email||!message)return res.status(400).json({error:'Complete the required fields.'});if(!pool)return res.json({ok:true,note:'Form is not connected to email yet.'});await pool.query('INSERT INTO morgan_messages(name,email,subject,message) VALUES($1,$2,$3,$4)',[name,email,subject||'',message]);res.json({ok:true})});
-app.get('/api/admin/content',async(req,res)=>{if(!authed(req))return res.status(401).json({error:'Login required'});if(!pool)return res.json({releases:[],services:[],testimonials:[],messages:[]});const[r,s,t,m]=await Promise.all([pool.query('SELECT * FROM morgan_releases ORDER BY id DESC'),pool.query('SELECT * FROM morgan_services ORDER BY id'),pool.query('SELECT * FROM morgan_testimonials ORDER BY id DESC'),pool.query('SELECT * FROM morgan_messages ORDER BY created_at DESC')]);res.json({releases:r.rows,services:s.rows,testimonials:t.rows,messages:m.rows})});
-const routes={releases:['title,kind,year,image','morgan_releases'],services:['title,description','morgan_services'],testimonials:['client,quote,image','morgan_testimonials']};for(const[k,[fields,table]]of Object.entries(routes)){const cols=fields.split(',');app.post('/api/admin/'+k,async(req,res)=>{if(!authed(req))return res.sendStatus(401);const vals=cols.map(x=>req.body[x]||'');await pool.query(`INSERT INTO ${table}(${fields}) VALUES(${cols.map((_,i)=>'$'+(i+1)).join(',')})`,vals);res.json({ok:true})});app.put('/api/admin/'+k+'/:id',async(req,res)=>{if(!authed(req))return res.sendStatus(401);const vals=cols.map(x=>req.body[x]||'');await pool.query(`UPDATE ${table} SET ${cols.map((x,i)=>x+'=$'+(i+1)).join(',')} WHERE id=$${cols.length+1}`,[...vals,req.params.id]);res.json({ok:true})});app.delete('/api/admin/'+k+'/:id',async(req,res)=>{if(!authed(req))return res.sendStatus(401);await pool.query(`DELETE FROM ${table} WHERE id=$1`,[req.params.id]);res.json({ok:true})})}
-db().then(()=>app.listen(port,'0.0.0.0',()=>console.log('Morgan Benjamin listening on '+port))).catch(console.error);
+try { require("dotenv").config(); } catch (_) {}
+const path = require("path");
+const crypto = require("crypto");
+const express = require("express");
+const multer = require("multer");
+const nodemailer = require("nodemailer");
+const { query, init, getSettings } = require("./db");
+
+const app = express();
+const PORT = process.env.PORT || 8090;
+const ADMIN_USER = process.env.ADMIN_USER || "admin";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "MorganArts";
+const SECRET = process.env.SECRET || crypto.randomBytes(32).toString("hex");
+const TOKEN_TTL = 7 * 24 * 3600 * 1000;
+
+app.disable("x-powered-by");
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept");
+  if (req.method === "OPTIONS") return res.status(204).end();
+  next();
+});
+app.use(express.json({ limit: "20mb" }));
+app.use(express.urlencoded({ extended: false, limit: "20mb" }));
+app.use(express.static(path.join(__dirname, "public")));
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 80 * 1024 * 1024 },
+});
+
+const sign = (v) => crypto.createHmac("sha256", SECRET).update(v).digest("hex");
+function makeToken() {
+  const payload = Buffer.from(JSON.stringify({ u: ADMIN_USER, exp: Date.now() + TOKEN_TTL })).toString("base64");
+  return payload + "." + sign(payload);
+}
+function verifyToken(token) {
+  if (!token) return false;
+  const [payload, sig] = token.split(".");
+  if (!payload || !sig || sign(payload) !== sig) return false;
+  try {
+    const d = JSON.parse(Buffer.from(payload, "base64").toString());
+    return d.u === ADMIN_USER && d.exp > Date.now();
+  } catch {
+    return false;
+  }
+}
+function getCookie(req, name) {
+  const c = req.headers.cookie || "";
+  const m = c.match(new RegExp("(?:^|;\\s*)" + name + "=([^;]+)"));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+function requireAdmin(req, res, next) {
+  if (verifyToken(getCookie(req, "mb_admin"))) return next();
+  res.status(401).json({ success: false, error: "Not authenticated" });
+}
+function checkPassword(pw) {
+  const a = Buffer.from(String(pw));
+  const b = Buffer.from(ADMIN_PASSWORD);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+const hits = new Map();
+function isRateLimited(ip) {
+  const now = Date.now();
+  const list = (hits.get(ip) || []).filter((t) => now - t < 15 * 60 * 1000);
+  if (list.length >= 6) {
+    hits.set(ip, list);
+    return true;
+  }
+  list.push(now);
+  hits.set(ip, list);
+  return false;
+}
+
+function getTransporter() {
+  if (process.env.RESEND_API_KEY) {
+    return nodemailer.createTransport({
+      host: "smtp.resend.com",
+      port: 465,
+      secure: true,
+      auth: { user: "resend", pass: process.env.RESEND_API_KEY },
+    });
+  }
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  if (!user || !pass) return null;
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST || "smtp.gmail.com",
+    port: Number(process.env.SMTP_PORT || 465),
+    secure: true,
+    auth: { user, pass },
+  });
+}
+
+const esc = (s) =>
+  String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
+const SERVICES = new Set(["Singing", "Songwriting", "Music Production", "Lyric Video", "Collaboration", "Other"]);
+
+function asBuffer(data) {
+  if (!data) return Buffer.alloc(0);
+  if (Buffer.isBuffer(data)) return data;
+  return Buffer.from(data);
+}
+
+app.get("/media/:id", async (req, res) => {
+  try {
+    const rows = await query("SELECT mime_type, data FROM media_files WHERE id = $1", [req.params.id]);
+    if (!rows[0]) return res.status(404).end();
+    const data = asBuffer(rows[0].data);
+    const total = data.length;
+    res.setHeader("Content-Type", rows[0].mime_type || "application/octet-stream");
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    const range = req.headers.range;
+    if (range) {
+      const m = /^bytes=(\d*)-(\d*)$/.exec(range);
+      if (!m) return res.status(416).end();
+      const start = m[1] ? Number(m[1]) : 0;
+      const end = m[2] ? Math.min(Number(m[2]), total - 1) : total - 1;
+      res.status(206);
+      res.setHeader("Content-Range", `bytes ${start}-${end}/${total}`);
+      res.setHeader("Content-Length", end - start + 1);
+      return res.end(data.subarray(start, end + 1));
+    }
+    res.setHeader("Content-Length", total);
+    res.end(data);
+  } catch (err) {
+    console.error("[media]", err.message);
+    res.status(500).end();
+  }
+});
+
+app.get("/api/content", async (_req, res) => {
+  try {
+    const [tracks, works, testimonials, settings] = await Promise.all([
+      query("SELECT * FROM tracks ORDER BY id DESC"),
+      query("SELECT * FROM works ORDER BY id DESC"),
+      query("SELECT * FROM testimonials ORDER BY id DESC"),
+      getSettings(),
+    ]);
+    res.json({ tracks, works, testimonials, settings });
+  } catch (err) {
+    console.error("[content]", err.message);
+    res.status(500).json({ success: false, error: "Could not load content." });
+  }
+});
+
+function unpackPayload(p) {
+  try {
+    let s = String(p || "").replace(/-/g, "+").replace(/_/g, "/");
+    while (s.length % 4) s += "=";
+    return JSON.parse(Buffer.from(s, "base64").toString("utf8"));
+  } catch {
+    return {};
+  }
+}
+
+async function handleContact(req, res) {
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").toString().split(",")[0].trim();
+  if (isRateLimited(ip)) return res.status(429).json({ success: false, error: "Too many messages. Try later." });
+  const packed = unpackPayload((req.query && req.query.p) || (req.body && req.body.p));
+  const src = Object.assign({}, packed, req.query || {}, req.body || {});
+  delete src.p;
+  if (src.website) return res.json({ success: true });
+
+  const name = String(src.name || "").trim();
+  const email = String(src.email || "").trim();
+  const dial = String(src.dial || "").trim();
+  let phone = String(src.phone || "").trim().slice(0, 60);
+  if (phone && dial && !phone.startsWith("+")) phone = (dial + " " + phone).slice(0, 60);
+  const service = String(src.service || "").trim();
+  const subject = String(src.subject || "").trim().slice(0, 200);
+  const message = String(src.message || "").trim();
+  if (name.length < 2) return res.status(400).json({ success: false, error: "Enter your name." });
+  if (!isValidEmail(email)) return res.status(400).json({ success: false, error: "Enter a valid email." });
+  if (!SERVICES.has(service)) return res.status(400).json({ success: false, error: "Pick a service." });
+  if (subject.length < 2) return res.status(400).json({ success: false, error: "Enter a subject." });
+  if (message.length < 4) return res.status(400).json({ success: false, error: "Write a short message." });
+
+  try {
+    await query(
+      "INSERT INTO enquiries (name, email, phone, service, subject, message) VALUES ($1,$2,$3,$4,$5,$6)",
+      [name, email, phone, service, subject, message]
+    );
+  } catch (err) {
+    console.error("[contact] save", err.message);
+    return res.status(500).json({ success: false, error: "Could not save. Try again." });
+  }
+
+  const transporter = getTransporter();
+  const toAddress = process.env.MAIL_TO || process.env.SMTP_USER;
+  if (transporter && toAddress) {
+    transporter
+      .sendMail({
+        from: process.env.MAIL_FROM || process.env.SMTP_USER,
+        to: toAddress,
+        replyTo: email,
+        subject: "Morgan Benjamin: " + subject,
+        text: `${name} <${email}>\n${phone}\n${service}\n${subject}\n\n${message}`,
+        html: `<p><b>${esc(name)}</b> &lt;${esc(email)}&gt;</p><p>${esc(phone)}</p><p>${esc(service)}</p><p>${esc(subject)}</p><p>${esc(message)}</p>`,
+      })
+      .catch((err) => console.error("[contact] mail", err.message));
+  }
+  const accept = String(req.headers.accept || "");
+  if (accept.includes("text/html") && !accept.includes("application/json")) {
+    return res.redirect("/?sent=1#contact");
+  }
+  res.json({ success: true });
+}
+app.post("/api/contact", handleContact);
+app.get("/api/contact", handleContact);
+
+app.post("/api/admin/login", (req, res) => {
+  const { user, password } = req.body || {};
+  if (user === ADMIN_USER && checkPassword(password)) {
+    res.setHeader(
+      "Set-Cookie",
+      `mb_admin=${encodeURIComponent(makeToken())}; HttpOnly; Path=/; SameSite=Lax; Max-Age=${TOKEN_TTL / 1000}`
+    );
+    return res.json({ success: true });
+  }
+  res.status(401).json({ success: false, error: "Wrong login." });
+});
+app.post("/api/admin/logout", (_req, res) => {
+  res.setHeader("Set-Cookie", "mb_admin=; HttpOnly; Path=/; Max-Age=0");
+  res.json({ success: true });
+});
+app.get("/api/admin/check", (req, res) => {
+  res.json({ authenticated: verifyToken(getCookie(req, "mb_admin")) });
+});
+
+app.post("/api/admin/upload", requireAdmin, upload.single("file"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ success: false, error: "No file." });
+  const mime = req.file.mimetype || "application/octet-stream";
+  const name = req.file.originalname || "file";
+  const rows = await query(
+    "INSERT INTO media_files (mime_type, original_name, data) VALUES ($1,$2,$3) RETURNING id",
+    [mime, name, req.file.buffer]
+  );
+  const id = rows[0] && rows[0].id;
+  res.json({ success: true, id, url: "/media/" + id });
+});
+
+app.get("/api/admin/enquiries", requireAdmin, async (_req, res) => {
+  res.json(await query("SELECT * FROM enquiries ORDER BY id DESC"));
+});
+app.patch("/api/admin/enquiries/:id", requireAdmin, async (req, res) => {
+  const status = req.body.status;
+  if (!["new", "read"].includes(status)) return res.status(400).json({ success: false });
+  await query("UPDATE enquiries SET status = $1 WHERE id = $2", [status, req.params.id]);
+  res.json({ success: true });
+});
+app.delete("/api/admin/enquiries/:id", requireAdmin, async (req, res) => {
+  await query("DELETE FROM enquiries WHERE id = $1", [req.params.id]);
+  res.json({ success: true });
+});
+
+function crud(base, table, fields, required = "title") {
+  app.get(`/api/admin/${base}`, requireAdmin, async (_req, res) => {
+    res.json(await query(`SELECT * FROM ${table} ORDER BY id DESC`));
+  });
+  app.delete(`/api/admin/${base}/:id`, requireAdmin, async (req, res) => {
+    await query(`DELETE FROM ${table} WHERE id = $1`, [req.params.id]);
+    res.json({ success: true });
+  });
+  app.post(`/api/admin/${base}`, requireAdmin, async (req, res) => {
+    const r = req.body || {};
+    if (!String(r[required] || "").trim()) return res.status(400).json({ success: false, error: "Fill the required field." });
+    const vals = fields.map((f) => (r[f] == null ? "" : r[f]));
+    const ph = fields.map((_, i) => `$${i + 1}`).join(",");
+    const rows = await query(
+      `INSERT INTO ${table} (${fields.join(",")}) VALUES (${ph}) RETURNING id`,
+      vals
+    );
+    res.json({ success: true, id: rows[0] && rows[0].id });
+  });
+  app.patch(`/api/admin/${base}/:id`, requireAdmin, async (req, res) => {
+    const r = req.body || {};
+    const set = fields.map((f, i) => `${f}=$${i + 1}`).join(",");
+    await query(`UPDATE ${table} SET ${set} WHERE id=$${fields.length + 1}`, [
+      ...fields.map((f) => (r[f] == null ? "" : r[f])),
+      req.params.id,
+    ]);
+    res.json({ success: true });
+  });
+}
+
+crud("tracks", "tracks", ["title", "genre", "role", "description", "cover", "audio", "links"]);
+crud("works", "works", ["title", "category", "description", "image", "audio"]);
+crud("testimonials", "testimonials", ["quote", "name", "role", "image"], "quote");
+
+app.get("/api/admin/settings", requireAdmin, async (_req, res) => {
+  res.json(await getSettings());
+});
+app.post("/api/admin/settings", requireAdmin, async (req, res) => {
+  const { key, value } = req.body || {};
+  if (!key) return res.status(400).json({ success: false });
+  const raw = typeof value === "string" ? value : JSON.stringify(value);
+  const existing = (await query("SELECT key FROM settings WHERE key = $1", [key]))[0];
+  if (existing) await query("UPDATE settings SET value = $1 WHERE key = $2", [raw, key]);
+  else await query("INSERT INTO settings (key, value) VALUES ($1,$2)", [key, raw]);
+  res.json({ success: true });
+});
+
+app.get("/admin", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "admin.html"));
+});
+
+app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
+init()
+  .then(() => {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log("Morgan Benjamin on 0.0.0.0:" + PORT);
+    });
+  })
+  .catch((err) => {
+    console.error("DB init failed:", err.message);
+    process.exit(1);
+  });
