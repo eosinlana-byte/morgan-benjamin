@@ -3,37 +3,59 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Morgan admin</title>
-  <link rel="stylesheet" href="/admin.css" />
+  <title>Admin, Morgan Benjamin</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" type="image/png" href="assets/logo.png" />
+  <link rel="stylesheet" href="admin.css" />
 </head>
 <body>
-  <div id="login">
-    <h1>Morgan</h1>
-    <input id="user" placeholder="Username" />
-    <input id="pass" type="password" placeholder="Password" />
-    <button id="go">Enter</button>
-    <p id="lerr"></p>
+  <div class="login" id="loginView">
+    <form class="login__card" id="loginForm">
+      <img src="assets/logo.png" alt="Morgan Benjamin" class="login__logo" />
+      <h1>Admin Dashboard</h1>
+      <p class="login__sub">Sign in to manage the site.</p>
+      <div class="field">
+        <label>Username</label>
+        <input type="text" id="loginUser" value="admin" autocomplete="username" />
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="loginPass" autocomplete="current-password" />
+      </div>
+      <p class="login__note" id="loginNote" role="status"></p>
+      <button type="submit" class="btn btn--primary btn--block" id="loginBtn">Sign In</button>
+    </form>
   </div>
-  <div id="dash" hidden>
-    <header>
-      <strong>MORGAN</strong>
-      <nav>
-        <button data-tab="tracks">Tracks</button>
-        <button data-tab="works">Work</button>
-        <button data-tab="notes">Notes</button>
-        <button data-tab="enquiries">Messages</button>
-        <button data-tab="settings">Settings</button>
+
+  <div class="app" id="appView" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar__brand">
+        <img src="assets/logo.png" alt="" />
+        <span>Morgan Benjamin</span>
+      </div>
+      <nav class="sidebar__nav">
+        <button type="button" data-view="dashboard" class="active">Dashboard</button>
+        <button type="button" data-view="tracks">Tracks</button>
+        <button type="button" data-view="works">Work</button>
+        <button type="button" data-view="notes">Notes</button>
+        <button type="button" data-view="enquiries">Messages <span class="badge" id="enqBadge" hidden>0</span></button>
+        <button type="button" data-view="settings">Settings</button>
       </nav>
-      <button id="out">Out</button>
-    </header>
-    <main>
-      <section id="tracks" class="tab"></section>
-      <section id="works" class="tab" hidden></section>
-      <section id="notes" class="tab" hidden></section>
-      <section id="enquiries" class="tab" hidden></section>
-      <section id="settings" class="tab" hidden></section>
+      <div class="sidebar__foot">
+        <a href="/" target="_blank" rel="noopener">View site</a>
+        <button type="button" id="logoutBtn">Log out</button>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="main__head">
+        <h2 id="viewTitle">Dashboard</h2>
+        <button class="btn btn--ghost" id="mobileMenuBtn" type="button">Menu</button>
+      </div>
+      <div id="viewContent" class="main__content"></div>
     </main>
   </div>
-  <script src="/admin.js"></script>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="admin.js"></script>
 </body>
 </html>
