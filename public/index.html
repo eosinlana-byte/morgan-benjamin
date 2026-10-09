@@ -127,7 +127,11 @@
     .contact-grid { display: grid; gap: 40px; }
     @media (min-width: 880px) { .contact-grid { grid-template-columns: .85fr 1.15fr; } }
     .mail { display: inline-block; margin: 12px 0; font-size: 22px; font-weight: 700; color: var(--gold); }
-    .form-card { background: #121212; border: 2px solid var(--line); border-radius: 20px; padding: 28px; display: grid; gap: 14px; }
+    .form-card.done .form-fields { display: none; }
+    .form-done { display: none; text-align: left; }
+    .form-card.done .form-done { display: block; }
+    .form-done h3 { font-size: 32px; font-weight: 700; margin: 8px 0 12px; }
+    .form-done p { color: var(--mute); font-size: 18px; }
     .form-card label { font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
     .form-card .req { color: var(--gold); }
     .form-card .opt { text-transform: none; letter-spacing: 0; font-weight: 400; opacity: .85; }
@@ -280,6 +284,12 @@
           <p id="socials"></p>
         </div>
         <form class="form-card" id="cform" method="get" action="/api/contact">
+          <div class="form-done" id="cdone">
+            <p class="kicker">Enquiry received</p>
+            <h3>I'll get back to you as soon as possible.</h3>
+            <p>Your message is with me. If I need anything else, I'll write to the email you sent.</p>
+          </div>
+          <div class="form-fields">
           <input name="website" class="hp" tabindex="-1" autocomplete="off" />
           <input type="hidden" name="p" id="cpack" value="" />
           <div>
@@ -319,6 +329,7 @@
           </div>
           <button type="submit">Send</button>
           <p class="empty" id="cmsg" hidden></p>
+          </div>
         </form>
       </div>
     </div>
@@ -334,7 +345,9 @@
       <div>
         <h4>On this site</h4>
         <a href="#home">Home</a>
-        <a href="#about">About</a">Contact</a>
+        <a href="#about">About</a>
+        <a href="#music">Music</a>
+        <a href="#contact">Contact</a>
       </div>
       <div>
         <h4>Write</h4>
@@ -347,10 +360,6 @@
     <button class="play-btn" id="dockPlay" type="button">▶</button>
     <div><strong id="dockTitle">After the Rain</strong></div>
   </div>
-  <script src="js/main.js?v=10"></script>
-</body>
-</html>
-iv>
-  <script src="js/main.js?v=9"></script>
+  <script src="js/main.js?v=11"></script>
 </body>
 </html>
