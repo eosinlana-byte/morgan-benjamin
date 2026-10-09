@@ -169,10 +169,15 @@ async function handleContact(req, res) {
   const packed = unpackPayload((req.query && req.query.p) || (req.body && req.body.p));
   const src = Object.assign({}, packed, req.query || {}, req.body || {});
   delete src.p;
-  if (src.website) return res.json({ success: true });
 
   const name = String(src.name || "").trim();
   const email = String(src.email || "").trim();
+  const trap = String(src.hp_trap || src.website || "").trim();
+  if (trap && trap !== email && !isValidEmail(trap)) {
+    const acceptEarly = String(req.headers.accept || "");
+    if (acceptEarly.includes("text/html")) return res.redirect("/?sent=1#contact");
+    return res.json({ success: true });
+  }
   const dial = String(src.dial || "").trim();
   let phone = String(src.phone || "").trim().slice(0, 60);
   if (phone && dial && !phone.startsWith("+")) phone = (dial + " " + phone).slice(0, 60);
@@ -210,7 +215,7 @@ async function handleContact(req, res) {
       .catch((err) => console.error("[contact] mail", err.message));
   }
   const accept = String(req.headers.accept || "");
-  if (accept.includes("text/html") && !accept.includes("application/json")) {
+  if (accept.includes("text/html")) {
     return res.redirect("/?sent=1#contact");
   }
   res.json({ success: true });
