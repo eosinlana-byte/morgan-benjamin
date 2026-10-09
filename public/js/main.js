@@ -479,12 +479,15 @@ const DIALS = [
   });
 })();
 
+function showEnquiryReceived() {
+  const form = document.getElementById("cform");
+  if (form) form.classList.add("done");
+  const contact = document.getElementById("contact");
+  if (contact) contact.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 if (new URLSearchParams(location.search).get("sent") === "1") {
-  const msg = document.getElementById("cmsg");
-  if (msg) {
-    msg.hidden = false;
-    msg.textContent = "Sent.";
-  }
+  showEnquiryReceived();
   if (history.replaceState) history.replaceState({}, "", "/#contact");
 }
 
