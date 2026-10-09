@@ -4,7 +4,7 @@ const crypto = require("crypto");
 const express = require("express");
 const multer = require("multer");
 const nodemailer = require("nodemailer");
-const { query, init, getSettings } = require("./db");
+const { query, init, getSettings, usePg } = require("./db");
 
 const app = express();
 const PORT = process.env.PORT || 8090;
@@ -110,30 +110,65 @@ function asBuffer(data) {
   return Buffer.from(data);
 }
 
+function guessAudioMime(mime, name) {
+  if (mime && /^audio\//i.test(mime)) return mime;
+  const n = String(name || "").toLowerCase();
+  if (n.endsWith(".mp3")) return "audio/mpeg";
+  if (n.endsWith(".wav")) return "audio/wav";
+  if (n.endsWith(".ogg")) return "audio/ogg";
+  if (n.endsWith(".m4a") || n.endsWith(".mp4")) return "audio/mp4";
+  return mime || "application/octet-stream";
+}
+
 app.get("/media/:id", async (req, res) => {
   try {
-    const rows = await query("SELECT mime_type, data FROM media_files WHERE id = $1", [req.params.id]);
-    if (!rows[0]) return res.status(404).end();
-    const data = asBuffer(rows[0].data);
-    const total = data.length;
-    res.setHeader("Content-Type", rows[0].mime_type || "application/octet-stream");
-    res.setHeader("Content-Disposition", "inline");
-    res.setHeader("Accept-Ranges", "bytes");
-    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-    res.setHeader("X-Content-Type-Options", "nosniff");
+    const id = req.params.id;
+    const sizeSql = usePg
+      ? "SELECT mime_type, original_name, octet_length(data) AS size FROM media_files WHERE id = $1"
+      : "SELECT mime_type, original_name, length(data) AS size FROM media_files WHERE id = $1";
+    const meta = await query(sizeSql, [id]);
+    if (!meta[0]) return res.status(404).end();
+    const total = Number(meta[0].size) || 0;
+    if (!total) return res.status(404).end();
+    const mime = guessAudioMime(meta[0].mime_type, meta[0].original_name);
+    const isAudio = /^audio\//i.test(mime);
+    const MAX = 256 * 1024;
+
+    let start = 0;
+    let end = total - 1;
     const range = req.headers.range;
     if (range) {
       const m = /^bytes=(\d*)-(\d*)$/.exec(range);
       if (!m) return res.status(416).end();
-      const start = m[1] ? Number(m[1]) : 0;
-      const end = m[2] ? Math.min(Number(m[2]), total - 1) : total - 1;
+      start = m[1] ? Number(m[1]) : 0;
+      end = m[2] ? Math.min(Number(m[2]), total - 1) : total - 1;
+    } else if (isAudio && total > MAX) {
+      end = MAX - 1;
+    }
+    if (isAudio && end - start + 1 > MAX) end = start + MAX - 1;
+    if (start < 0 || start >= total) {
+      res.setHeader("Content-Range", `bytes */${total}`);
+      return res.status(416).end();
+    }
+    end = Math.min(end, total - 1);
+    const length = end - start + 1;
+    const sliceSql = usePg
+      ? "SELECT substring(data from $2 for $3) AS chunk FROM media_files WHERE id = $1"
+      : "SELECT substr(data, $2, $3) AS chunk FROM media_files WHERE id = $1";
+    const rows = await query(sliceSql, [id, start + 1, length]);
+    const buf = asBuffer(rows[0] && rows[0].chunk);
+
+    res.setHeader("Content-Type", mime);
+    res.setHeader("Content-Disposition", "inline");
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    if (start > 0 || end < total - 1) {
       res.status(206);
       res.setHeader("Content-Range", `bytes ${start}-${end}/${total}`);
-      res.setHeader("Content-Length", end - start + 1);
-      return res.end(data.subarray(start, end + 1));
     }
-    res.setHeader("Content-Length", total);
-    res.end(data);
+    res.setHeader("Content-Length", buf.length);
+    res.end(buf);
   } catch (err) {
     console.error("[media]", err.message);
     res.status(500).end();
