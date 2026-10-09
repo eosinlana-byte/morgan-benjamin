@@ -39,7 +39,7 @@ let currentView = "dashboard";
 const TITLES = {
   dashboard: "Dashboard",
   tracks: "Tracks",
-  notes: "Notes",
+  portfolio: "Portfolio",
   enquiries: "Messages",
   settings: "Settings",
 };
@@ -55,7 +55,7 @@ function loadView(view) {
   c.innerHTML = "";
   if (view === "dashboard") renderDashboard(c);
   else if (view === "tracks") renderTracks(c);
-  else if (view === "notes") renderNotes(c);
+  else if (view === "portfolio") renderPortfolio(c);
   else if (view === "enquiries") renderEnquiries(c);
   else if (view === "settings") renderSettings(c);
 }
@@ -109,9 +109,9 @@ function row(title, sub, id, kind) {
 }
 
 async function renderDashboard(c) {
-  const [tracks, notes, enqs] = await Promise.all([
+  const [tracks, folio, enqs] = await Promise.all([
     api("/api/admin/tracks"),
-    api("/api/admin/testimonials"),
+    api("/api/admin/works"),
     api("/api/admin/enquiries"),
   ]);
   const unread = enqs.filter((e) => e.status !== "read").length;
@@ -123,10 +123,10 @@ async function renderDashboard(c) {
   c.innerHTML = `
     <div class="stats">
       <div class="stat"><div class="stat__num">${tracks.length}</div><div class="stat__label">Tracks</div></div>
-      <div class="stat"><div class="stat__num">${notes.length}</div><div class="stat__label">Notes</div></div>
+      <div class="stat"><div class="stat__num">${folio.length}</div><div class="stat__label">Portfolio</div></div>
       <div class="stat"><div class="stat__num">${enqs.length}</div><div class="stat__label">Messages</div></div>
     </div>
-    ${panel("Quick add", `<p class="empty">Use Tracks to add After the Rain audio and cover. Use Notes only for real listener quotes.</p>`)}
+    ${panel("Quick add", `<p class="empty">Use Tracks for songs. Use Portfolio for photos or text pieces.</p>`)}
   `;
 }
 
@@ -353,27 +353,93 @@ async function renderTracks(c) {
   });
 }
 
-async function renderNotes(c) {
-  c.innerHTML = panel("Add a real listener note", "");
-  c.querySelector(".panel__body").appendChild(
-    addForm(
-      [
-        ["quote", "What they said", "textarea"],
-        ["name", "Name"],
-        ["role", "Fan / city / optional"],
-        ["image", "Photo URL optional"],
-      ],
-      (body) => api("/api/admin/testimonials", { method: "POST", body: JSON.stringify(body) })
-    )
-  );
-  const rows = await api("/api/admin/testimonials");
-  const list = document.createElement("section");
-  list.className = "panel";
-  list.innerHTML = `<div class="panel__head"><h3>Notes</h3></div><div class="panel__body"></div>`;
-  const body = list.querySelector(".panel__body");
-  if (!rows.length) body.innerHTML = `<p class="empty">Real notes show here when added. No fake quotes.</p>`;
-  rows.forEach((r) => body.appendChild(row(r.name || "Note", (r.quote || "").slice(0, 80), r.id, "testimonials")));
-  c.appendChild(list);
+function portfolioForm(s = {}) {
+  const kind = s.category === "text" ? "text" : "image";
+  return `
+    <div class="field">
+      <label>Type</label>
+      <select data-name="category" id="pKind">
+        <option value="image"${kind === "image" ? " selected" : ""}>Image</option>
+        <option value="text"${kind === "text" ? " selected" : ""}>Text</option>
+      </select>
+    </div>
+    ${fieldHTML("Title", "title", s.title)}
+    <div id="pImageBox">${fileFieldHTML("Image", "image", s.image || "", "image/*")}</div>
+    <div id="pTextBox">${fieldHTML("Text", "description", s.description, { type: "textarea", rows: 8 })}</div>`;
+}
+
+function togglePortfolioType() {
+  const kind = ($("#pKind") && $("#pKind").value) || "image";
+  const img = $("#pImageBox");
+  const txt = $("#pTextBox");
+  if (img) img.style.display = kind === "image" ? "block" : "none";
+  if (txt) txt.style.display = kind === "text" ? "block" : "none";
+}
+
+async function openPortfolioForm(id) {
+  let data = {};
+  if (id) {
+    const all = await api("/api/admin/works");
+    data = all.find((x) => String(x.id) === String(id)) || {};
+  }
+  openModal(id ? "Edit" : "Add New", `
+    <form id="entityForm">${portfolioForm(data)}</form>
+    <button class="btn btn--primary btn--block" id="saveBtn" type="button" style="margin-top:8px">Save</button>`);
+  togglePortfolioType();
+  if ($("#pKind")) $("#pKind").onchange = togglePortfolioType;
+  $("#saveBtn").onclick = async () => {
+    const body = collectForm($("#entityForm"));
+    body.category = body.category === "text" ? "text" : "image";
+    if (!String(body.title || "").trim()) {
+      body.title = body.category === "text" ? "Text" : "Image";
+    }
+    if (body.category === "image" && !body.image) {
+      toast("Upload an image or paste a URL", "err");
+      return;
+    }
+    if (body.category === "text" && !String(body.description || "").trim()) {
+      toast("Write some text", "err");
+      return;
+    }
+    try {
+      if (id) await api("/api/admin/works/" + id, { method: "PATCH", body: JSON.stringify(body) });
+      else await api("/api/admin/works", { method: "POST", body: JSON.stringify(body) });
+      closeModal();
+      toast("Saved");
+      loadView("portfolio");
+    } catch (e) {
+      toast(e.message, "err");
+    }
+  };
+}
+
+async function renderPortfolio(c) {
+  const rows = await api("/api/admin/works");
+  c.innerHTML = `
+    <div class="panel">
+      <div class="panel__head">
+        <h3>Portfolio (${rows.length})</h3>
+        <button type="button" class="btn btn--primary" id="addFolio">+ Add</button>
+      </div>
+      <div class="panel__body" id="folioList"></div>
+    </div>`;
+  $("#addFolio").onclick = () => openPortfolioForm();
+  const body = $("#folioList");
+  if (!rows.length) body.innerHTML = `<p class="empty">Add an image or a text piece.</p>`;
+  rows.forEach((r) => {
+    const wrap = document.createElement("div");
+    wrap.className = "list-row";
+    wrap.innerHTML = `<div class="list-row__main"><div class="list-row__title"></div><div class="list-row__sub"></div></div><div class="list-row__actions"><button type="button" class="btn btn--ghost btn--sm">Edit</button><button type="button" class="btn btn--danger btn--sm">Delete</button></div>`;
+    wrap.querySelector(".list-row__title").textContent = r.title || (r.category === "text" ? "Text" : "Image");
+    wrap.querySelector(".list-row__sub").textContent = r.category === "text" ? "Text" : "Image";
+    wrap.querySelector(".btn--ghost").onclick = () => openPortfolioForm(r.id);
+    wrap.querySelector(".btn--danger").onclick = async () => {
+      if (!confirm("Delete this?")) return;
+      await api("/api/admin/works/" + r.id, { method: "DELETE" });
+      loadView("portfolio");
+    };
+    body.appendChild(wrap);
+  });
 }
 
 async function renderEnquiries(c) {

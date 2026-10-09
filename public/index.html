@@ -108,7 +108,7 @@
     .card:hover { border-color: var(--gold); }
     .card img { width: 100%; height: 200px; object-fit: cover; margin-bottom: 14px; background: #111; }
     .card h3 { font-size: 26px; font-weight: 700; }
-    .card p { color: var(--mute); margin-top: 8px; font-size: 17px; }
+    .card p { color: var(--mute); margin-top: 8px; font-size: 17px; white-space: pre-wrap; }
     audio { width: 100%; margin-top: 12px; }
     .genres { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
     .genres span {
@@ -189,7 +189,7 @@
       <a href="#home">Home</a>
       <a href="#about">About</a>
       <a href="#music">Music</a>
-      <a href="#notes">Notes</a>
+      <a href="#portfolio">Portfolio</a>
       <a href="#contact">Contact</a>
     </div>
   </nav>
@@ -258,12 +258,12 @@
     </div>
   </section>
 
-  <section class="sec" id="notes">
+  <section class="sec" id="portfolio">
     <div class="wrap">
-      <p class="kicker">Notes</p>
-      <h2>From listeners</h2>
-      <div id="quotes" class="cards two"></div>
-      <p class="empty" id="quotesEmpty">Real notes show here when they are added in admin. No fake quotes.</p>
+      <p class="kicker">Portfolio</p>
+      <h2>Selected work</h2>
+      <div id="folio" class="cards two"></div>
+      <p class="empty" id="folioEmpty">Pieces show here when they are added in admin.</p>
     </div>
   </section>
 
@@ -358,6 +358,6 @@
     <button class="play-btn" id="dockPlay" type="button">▶</button>
     <div><strong id="dockTitle">After the Rain</strong></div>
   </div>
-  <script src="js/main.js?v=12"></script>
+  <script src="js/main.js?v=13"></script>
 </body>
 </html>
