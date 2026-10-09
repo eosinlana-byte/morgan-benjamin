@@ -186,30 +186,175 @@ function addForm(fields, onSave) {
   return f;
 }
 
+function esc(s) {
+  return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function fieldHTML(label, name, value, opts = {}) {
+  const required = opts.required ? "required" : "";
+  const input = opts.type === "textarea"
+    ? `<textarea data-name="${name}" rows="${opts.rows || 3}" ${required}>${esc(value)}</textarea>`
+    : `<input type="text" data-name="${name}" value="${esc(value)}" ${required} />`;
+  return `<div class="field"><label>${esc(label)}</label>${input}${opts.hint ? `<div class="hint">${esc(opts.hint)}</div>` : ""}</div>`;
+}
+
+function fileFieldHTML(label, name, value, accept) {
+  const showImage = Boolean(value) && accept.includes("image");
+  return `
+  <div class="field">
+    <label>${esc(label)}</label>
+    <input type="text" data-name="${name}" value="${esc(value)}" placeholder="Upload a file or paste a URL" />
+    <div class="file-pick">
+      <button type="button" class="btn btn--ghost btn--sm" data-upload="${name}">Upload</button>
+      <input type="file" data-file="${name}" accept="${accept}" />
+      <span class="file-pick__name" data-filename="${name}"></span>
+    </div>
+    <div class="url-preview" data-urlpreview="${name}">${value ? "Saved: " + esc(value) : ""}</div>
+    <img class="preview-img" data-preview="${name}" ${showImage ? `src="${esc(value)}"` : "hidden"} />
+  </div>`;
+}
+
+function collectForm(root) {
+  const body = {};
+  root.querySelectorAll("[data-name]").forEach((el) => {
+    body[el.dataset.name] = el.value;
+  });
+  return body;
+}
+
+function closeModal() {
+  const m = $("#modal");
+  if (m) m.hidden = true;
+}
+
+function openModal(title, html) {
+  $("#modalTitle").textContent = title;
+  $("#modalBody").innerHTML = html;
+  $("#modal").hidden = false;
+  $("#modal").querySelectorAll("[data-close]").forEach((el) => {
+    el.onclick = closeModal;
+  });
+  wireUploads($("#modalBody"));
+}
+
+function wireUploads(root) {
+  root.querySelectorAll("[data-upload]").forEach((btn) => {
+    btn.onclick = () => root.querySelector(`[data-file="${btn.dataset.upload}"]`).click();
+  });
+  root.querySelectorAll("[data-file]").forEach((input) => {
+    input.onchange = async () => {
+      const file = input.files[0];
+      if (!file) return;
+      const name = input.dataset.file;
+      const label = root.querySelector(`[data-filename="${name}"]`);
+      if (label) label.textContent = "Uploading…";
+      try {
+        const url = await upload(file);
+        const urlInput = root.querySelector(`[data-name="${name}"]`);
+        if (urlInput) urlInput.value = url;
+        const prev = root.querySelector(`[data-urlpreview="${name}"]`);
+        if (prev) prev.textContent = "Saved: " + url;
+        const img = root.querySelector(`[data-preview="${name}"]`);
+        if (img && file.type.startsWith("image")) {
+          img.src = url;
+          img.hidden = false;
+        }
+        if (label) label.textContent = file.name;
+        toast("Uploaded");
+      } catch (err) {
+        if (label) label.textContent = "";
+        toast(err.message, "err");
+      }
+    };
+  });
+}
+
+function trackForm(s = {}) {
+  return `
+    <div class="field-row">
+      ${fieldHTML("Title *", "title", s.title, { required: true })}
+      ${fieldHTML("Artist", "artist", s.artist || "Morgan Benjamin")}
+    </div>
+    <div class="field-row">
+      ${fieldHTML("Genre", "genre", s.genre)}
+      ${fieldHTML("Release Date", "release_date", s.release_date, { hint: "e.g. 2026" })}
+    </div>
+    ${fieldHTML("Description", "description", s.description, { type: "textarea" })}
+    ${fileFieldHTML("Cover Artwork", "cover", s.cover || "", "image/*")}
+    ${fileFieldHTML("Audio File (.mp3)", "audio", s.audio || "", "audio/*")}
+    ${fieldHTML("YouTube ID (for Listen button)", "youtube_id", s.youtube_id, { hint: "The video ID, e.g. dQw4w9WgXcQ" })}
+    <div class="field-row">
+      ${fieldHTML("Spotify Link", "spotify", s.spotify)}
+      ${fieldHTML("Apple Music Link", "apple", s.apple)}
+    </div>
+    <div class="field-row">
+      ${fieldHTML("YouTube Link", "youtube", s.youtube)}
+      ${fieldHTML("Audiomack Link", "audiomack", s.audiomack)}
+    </div>`;
+}
+
+function packTrackLinks(body) {
+  const urls = [body.spotify, body.apple, body.youtube, body.audiomack].filter(Boolean);
+  if (body.youtube_id && !body.youtube) urls.push("https://www.youtube.com/watch?v=" + body.youtube_id);
+  body.links = urls.join(" ");
+  body.role = body.artist || "Morgan Benjamin";
+  return body;
+}
+
+async function openTrackForm(id) {
+  let data = {};
+  if (id) {
+    const all = await api("/api/admin/tracks");
+    data = all.find((x) => String(x.id) === String(id)) || {};
+  }
+  openModal(id ? "Edit" : "Add New", `
+    <form id="entityForm">${trackForm(data)}</form>
+    <button class="btn btn--primary btn--block" id="saveBtn" type="button" style="margin-top:8px">Save</button>`);
+  $("#saveBtn").onclick = async () => {
+    const body = packTrackLinks(collectForm($("#entityForm")));
+    if (!String(body.title || "").trim()) {
+      toast("Enter a title", "err");
+      return;
+    }
+    try {
+      if (id) await api("/api/admin/tracks/" + id, { method: "PATCH", body: JSON.stringify(body) });
+      else await api("/api/admin/tracks", { method: "POST", body: JSON.stringify(body) });
+      closeModal();
+      toast("Saved");
+      loadView("tracks");
+    } catch (e) {
+      toast(e.message, "err");
+    }
+  };
+}
+
 async function renderTracks(c) {
-  c.innerHTML = panel("Add a track", "");
-  c.querySelector(".panel__body").appendChild(
-    addForm(
-      [
-        ["title", "Title"],
-        ["genre", "Genre (pop, rock, rap, indie, edm)"],
-        ["role", "Role"],
-        ["description", "Note", "textarea"],
-        ["audio", "Audio URL if not uploading"],
-        ["cover", "Cover URL if not uploading"],
-        ["links", "Spotify / YouTube link"],
-      ],
-      (body) => api("/api/admin/tracks", { method: "POST", body: JSON.stringify(body) })
-    )
-  );
   const rows = await api("/api/admin/tracks");
-  const list = document.createElement("section");
-  list.className = "panel";
-  list.innerHTML = `<div class="panel__head"><h3>Tracks</h3></div><div class="panel__body"></div>`;
-  const body = list.querySelector(".panel__body");
+  c.innerHTML = `
+    <div class="panel">
+      <div class="panel__head">
+        <h3>All tracks (${rows.length})</h3>
+        <button type="button" class="btn btn--primary" id="addTrack">+ Add track</button>
+      </div>
+      <div class="panel__body" id="trackList"></div>
+    </div>`;
+  $("#addTrack").onclick = () => openTrackForm();
+  const body = $("#trackList");
   if (!rows.length) body.innerHTML = `<p class="empty">None yet.</p>`;
-  rows.forEach((r) => body.appendChild(row(r.title, r.genre, r.id, "tracks")));
-  c.appendChild(list);
+  rows.forEach((r) => {
+    const wrap = document.createElement("div");
+    wrap.className = "list-row";
+    wrap.innerHTML = `<div class="list-row__main"><div class="list-row__title"></div><div class="list-row__sub"></div></div><div class="list-row__actions"><button type="button" class="btn btn--ghost btn--sm">Edit</button><button type="button" class="btn btn--danger btn--sm">Delete</button></div>`;
+    wrap.querySelector(".list-row__title").textContent = r.title;
+    wrap.querySelector(".list-row__sub").textContent = [r.artist || "Morgan Benjamin", r.genre, r.release_date].filter(Boolean).join(" · ");
+    wrap.querySelector(".btn--ghost").onclick = () => openTrackForm(r.id);
+    wrap.querySelector(".btn--danger").onclick = async () => {
+      if (!confirm("Delete this?")) return;
+      await api("/api/admin/tracks/" + r.id, { method: "DELETE" });
+      loadView("tracks");
+    };
+    body.appendChild(wrap);
+  });
 }
 
 async function renderWorks(c) {
