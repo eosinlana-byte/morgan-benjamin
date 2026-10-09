@@ -39,7 +39,7 @@ let currentView = "dashboard";
 const TITLES = {
   dashboard: "Dashboard",
   tracks: "Tracks",
-  portfolio: "Portfolio",
+  portfolio: "Testimonials",
   enquiries: "Enquiries",
   settings: "Settings",
 };
@@ -123,10 +123,10 @@ async function renderDashboard(c) {
   c.innerHTML = `
     <div class="stats">
       <div class="stat"><div class="stat__num">${tracks.length}</div><div class="stat__label">Tracks</div></div>
-      <div class="stat"><div class="stat__num">${folio.length}</div><div class="stat__label">Portfolio</div></div>
+      <div class="stat"><div class="stat__num">${folio.length}</div><div class="stat__label">Testimonials</div></div>
       <div class="stat"><div class="stat__num">${enqs.length}</div><div class="stat__label">Enquiries</div></div>
     </div>
-    ${panel("Quick add", `<p class="empty">Use Tracks for songs. Use Portfolio for photos or text pieces.</p>`)}
+    ${panel("Quick add", `<p class="empty">Use Tracks for songs. Use Testimonials for a photo or a written note.</p>`)}
   `;
 }
 
@@ -418,14 +418,14 @@ async function renderPortfolio(c) {
   c.innerHTML = `
     <div class="panel">
       <div class="panel__head">
-        <h3>Portfolio (${rows.length})</h3>
+        <h3>Testimonials (${rows.length})</h3>
         <button type="button" class="btn btn--primary" id="addFolio">+ Add</button>
       </div>
       <div class="panel__body" id="folioList"></div>
     </div>`;
   $("#addFolio").onclick = () => openPortfolioForm();
   const body = $("#folioList");
-  if (!rows.length) body.innerHTML = `<p class="empty">Add an image or a text piece.</p>`;
+  if (!rows.length) body.innerHTML = `<p class="empty">Add a photo or a written note.</p>`;
   rows.forEach((r) => {
     const wrap = document.createElement("div");
     wrap.className = "list-row";
