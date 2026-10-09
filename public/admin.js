@@ -40,7 +40,7 @@ const TITLES = {
   dashboard: "Dashboard",
   tracks: "Tracks",
   portfolio: "Portfolio",
-  enquiries: "Messages",
+  enquiries: "Enquiries",
   settings: "Settings",
 };
 
@@ -124,7 +124,7 @@ async function renderDashboard(c) {
     <div class="stats">
       <div class="stat"><div class="stat__num">${tracks.length}</div><div class="stat__label">Tracks</div></div>
       <div class="stat"><div class="stat__num">${folio.length}</div><div class="stat__label">Portfolio</div></div>
-      <div class="stat"><div class="stat__num">${enqs.length}</div><div class="stat__label">Messages</div></div>
+      <div class="stat"><div class="stat__num">${enqs.length}</div><div class="stat__label">Enquiries</div></div>
     </div>
     ${panel("Quick add", `<p class="empty">Use Tracks for songs. Use Portfolio for photos or text pieces.</p>`)}
   `;
@@ -443,31 +443,76 @@ async function renderPortfolio(c) {
 }
 
 async function renderEnquiries(c) {
-  const rows = await api("/api/admin/enquiries");
-  const unread = rows.filter((e) => e.status !== "read").length;
+  const items = await api("/api/admin/enquiries");
+  const newCount = items.filter((e) => e.status === "new").length;
   const badge = $("#enqBadge");
-  if (unread) {
+  if (newCount) {
     badge.hidden = false;
-    badge.textContent = String(unread);
+    badge.textContent = String(newCount);
   } else badge.hidden = true;
-  const list = document.createElement("section");
-  list.className = "panel";
-  list.innerHTML = `<div class="panel__head"><h3>Messages</h3></div><div class="panel__body"></div>`;
-  const body = list.querySelector(".panel__body");
-  if (!rows.length) body.innerHTML = `<p class="empty">None yet.</p>`;
-  rows.forEach((r) => {
-    const d = document.createElement("div");
-    d.className = "enquiry";
-    d.innerHTML = `<div class="enquiry__meta"></div><div class="enquiry__msg"></div><div class="list-row__actions" style="margin-top:10px"><button type="button" class="btn btn--danger btn--sm">Delete</button></div>`;
-    d.querySelector(".enquiry__meta").textContent = [r.name, r.email, r.phone, r.service, r.subject].filter(Boolean).join(" · ");
-    d.querySelector(".enquiry__msg").textContent = r.message || "";
-    d.querySelector("button").onclick = async () => {
-      await api("/api/admin/enquiries/" + r.id, { method: "DELETE" });
+
+  c.innerHTML = `
+    <div class="panel">
+      <div class="panel__head"><h3>Enquiries (${items.length})</h3></div>
+      <div class="panel__body" id="enqList"></div>
+    </div>`;
+  const body = $("#enqList");
+  if (!items.length) {
+    body.innerHTML = `<p class="empty">None yet.</p>`;
+    return;
+  }
+  items.forEach((e) => {
+    const wrap = document.createElement("div");
+    wrap.className = "list-row" + (e.status === "read" ? " enquiry--read" : "");
+    wrap.innerHTML = `
+      <div class="list-row__main">
+        <div class="list-row__title"></div>
+        <div class="list-row__sub"></div>
+      </div>
+      <div class="list-row__actions">
+        <button type="button" class="btn btn--ghost btn--sm" data-open>View</button>
+        <button type="button" class="btn btn--ghost btn--sm" data-toggle></button>
+        <button type="button" class="btn btn--danger btn--sm" data-del>Delete</button>
+      </div>`;
+    const title = wrap.querySelector(".list-row__title");
+    title.textContent = (e.status === "new" ? "● " : "") + (e.name || "");
+    const svc = document.createElement("span");
+    svc.style.color = "var(--accent-2)";
+    svc.style.fontWeight = "500";
+    svc.textContent = e.service ? " " + e.service : "";
+    title.appendChild(svc);
+    wrap.querySelector(".list-row__sub").textContent = [e.email, e.phone, e.created_at].filter(Boolean).join(" · ");
+    wrap.querySelector("[data-toggle]").textContent = e.status === "new" ? "Mark read" : "Mark new";
+    wrap.querySelector("[data-open]").onclick = () => {
+      const mail = "mailto:" + encodeURIComponent(e.email || "") + "?subject=" + encodeURIComponent("Re: " + (e.subject || ""));
+      openModal("Enquiry", `
+        <div class="enquiry">
+          <div class="enquiry__meta"></div>
+          <p style="margin-bottom:10px"><strong>Subject:</strong> <span data-sub></span></p>
+          <div class="enquiry__msg"></div>
+          <a class="btn btn--primary btn--block" style="margin-top:16px" data-mail>Reply by Email</a>
+        </div>`);
+      const box = $("#modalBody");
+      box.querySelector(".enquiry__meta").textContent = [e.name, e.email, e.phone, e.service, e.created_at].filter(Boolean).join(" · ");
+      box.querySelector("[data-sub]").textContent = e.subject || "";
+      box.querySelector(".enquiry__msg").textContent = e.message || "";
+      box.querySelector("[data-mail]").href = mail;
+    };
+    wrap.querySelector("[data-toggle]").onclick = async () => {
+      await api("/api/admin/enquiries/" + e.id, {
+        method: "PATCH",
+        body: JSON.stringify({ status: e.status === "new" ? "read" : "new" }),
+      });
       loadView("enquiries");
     };
-    body.appendChild(d);
+    wrap.querySelector("[data-del]").onclick = async () => {
+      if (!confirm("Delete this enquiry?")) return;
+      await api("/api/admin/enquiries/" + e.id, { method: "DELETE" });
+      toast("Deleted");
+      loadView("enquiries");
+    };
+    body.appendChild(wrap);
   });
-  c.appendChild(list);
 }
 
 async function renderSettings(c) {
