@@ -39,7 +39,6 @@ let currentView = "dashboard";
 const TITLES = {
   dashboard: "Dashboard",
   tracks: "Tracks",
-  works: "Work",
   notes: "Notes",
   enquiries: "Messages",
   settings: "Settings",
@@ -56,7 +55,6 @@ function loadView(view) {
   c.innerHTML = "";
   if (view === "dashboard") renderDashboard(c);
   else if (view === "tracks") renderTracks(c);
-  else if (view === "works") renderWorks(c);
   else if (view === "notes") renderNotes(c);
   else if (view === "enquiries") renderEnquiries(c);
   else if (view === "settings") renderSettings(c);
@@ -111,9 +109,8 @@ function row(title, sub, id, kind) {
 }
 
 async function renderDashboard(c) {
-  const [tracks, works, notes, enqs] = await Promise.all([
+  const [tracks, notes, enqs] = await Promise.all([
     api("/api/admin/tracks"),
-    api("/api/admin/works"),
     api("/api/admin/testimonials"),
     api("/api/admin/enquiries"),
   ]);
@@ -126,7 +123,6 @@ async function renderDashboard(c) {
   c.innerHTML = `
     <div class="stats">
       <div class="stat"><div class="stat__num">${tracks.length}</div><div class="stat__label">Tracks</div></div>
-      <div class="stat"><div class="stat__num">${works.length}</div><div class="stat__label">Work</div></div>
       <div class="stat"><div class="stat__num">${notes.length}</div><div class="stat__label">Notes</div></div>
       <div class="stat"><div class="stat__num">${enqs.length}</div><div class="stat__label">Messages</div></div>
     </div>
@@ -355,30 +351,6 @@ async function renderTracks(c) {
     };
     body.appendChild(wrap);
   });
-}
-
-async function renderWorks(c) {
-  c.innerHTML = panel("Add work", "");
-  c.querySelector(".panel__body").appendChild(
-    addForm(
-      [
-        ["title", "Title"],
-        ["category", "Category"],
-        ["description", "Note", "textarea"],
-        ["audio", "Audio URL optional"],
-        ["image", "Image URL optional"],
-      ],
-      (body) => api("/api/admin/works", { method: "POST", body: JSON.stringify(body) })
-    )
-  );
-  const rows = await api("/api/admin/works");
-  const list = document.createElement("section");
-  list.className = "panel";
-  list.innerHTML = `<div class="panel__head"><h3>Work</h3></div><div class="panel__body"></div>`;
-  const body = list.querySelector(".panel__body");
-  if (!rows.length) body.innerHTML = `<p class="empty">None yet.</p>`;
-  rows.forEach((r) => body.appendChild(row(r.title, r.category, r.id, "works")));
-  c.appendChild(list);
 }
 
 async function renderNotes(c) {
