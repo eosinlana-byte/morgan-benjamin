@@ -91,9 +91,6 @@ fetch("/api/content")
     const rest = featured ? tracks.filter((t) => t.id !== featured.id) : tracks;
     const tracksBox = document.getElementById("tracks");
     const tracksEmpty = document.getElementById("tracksEmpty");
-    const works = data.works || [];
-    const worksBox = document.getElementById("works");
-    const worksEmpty = document.getElementById("worksEmpty");
 
     function matchStyle(value, cat) {
       const g = String(value || "").toLowerCase();
@@ -128,39 +125,11 @@ fetch("/api/content")
     }
 
     function draw(cat) {
-      if (tracksBox) {
-        tracksBox.innerHTML = "";
-        const list = rest.filter((t) => matchStyle(t.genre, cat));
-        list.forEach((t) => tracksBox.appendChild(trackCard(t)));
-        if (tracksEmpty) tracksEmpty.style.display = list.length || (cat !== "all" ? 0 : rest.length) ? "none" : "block";
-      }
-      if (!worksBox) return;
-      worksBox.innerHTML = "";
-      const list = works.filter((w) => matchStyle(w.category, cat));
-      if (worksEmpty) worksEmpty.style.display = list.length || (tracksBox && tracksBox.children.length) ? "none" : "block";
-      list.forEach((w) => {
-        const card = el("<article class='card'></article>");
-        if (w.image) {
-          const img = document.createElement("img");
-          img.src = w.image;
-          img.alt = w.title;
-          card.appendChild(img);
-        }
-        const h = document.createElement("h3");
-        h.textContent = w.title;
-        card.appendChild(h);
-        const p = document.createElement("p");
-        p.textContent = w.category || "";
-        card.appendChild(p);
-        if (w.audio) {
-          const a = document.createElement("audio");
-          a.controls = true;
-          a.preload = "none";
-          a.src = w.audio;
-          card.appendChild(a);
-        }
-        worksBox.appendChild(card);
-      });
+      if (!tracksBox) return;
+      tracksBox.innerHTML = "";
+      const list = rest.filter((t) => matchStyle(t.genre, cat));
+      list.forEach((t) => tracksBox.appendChild(trackCard(t)));
+      if (tracksEmpty) tracksEmpty.style.display = list.length ? "none" : "block";
     }
     draw("all");
     document.querySelectorAll("#filters button").forEach((btn) => {
