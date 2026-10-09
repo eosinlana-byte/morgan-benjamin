@@ -293,7 +293,22 @@ function crud(base, table, fields, required = "title") {
   });
 }
 
-crud("tracks", "tracks", ["title", "genre", "role", "description", "cover", "audio", "links"]);
+crud("tracks", "tracks", [
+  "title",
+  "genre",
+  "role",
+  "description",
+  "cover",
+  "audio",
+  "links",
+  "artist",
+  "release_date",
+  "youtube_id",
+  "spotify",
+  "apple",
+  "youtube",
+  "audiomack",
+]);
 crud("works", "works", ["title", "category", "description", "image", "audio"]);
 crud("testimonials", "testimonials", ["quote", "name", "role", "image"], "quote");
 

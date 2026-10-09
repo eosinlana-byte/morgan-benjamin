@@ -65,6 +65,13 @@ async function init() {
       cover TEXT DEFAULT '',
       audio TEXT DEFAULT '',
       links TEXT DEFAULT '',
+      artist TEXT DEFAULT 'Morgan Benjamin',
+      release_date TEXT DEFAULT '',
+      youtube_id TEXT DEFAULT '',
+      spotify TEXT DEFAULT '',
+      apple TEXT DEFAULT '',
+      youtube TEXT DEFAULT '',
+      audiomack TEXT DEFAULT '',
       created_at TIMESTAMP DEFAULT ${now}
     )
   `);
@@ -121,6 +128,20 @@ async function init() {
   try {
     await query("ALTER TABLE enquiries ADD COLUMN subject TEXT DEFAULT ''");
   } catch (_) {}
+  const extraCols = [
+    ["artist", "TEXT DEFAULT 'Morgan Benjamin'"],
+    ["release_date", "TEXT DEFAULT ''"],
+    ["youtube_id", "TEXT DEFAULT ''"],
+    ["spotify", "TEXT DEFAULT ''"],
+    ["apple", "TEXT DEFAULT ''"],
+    ["youtube", "TEXT DEFAULT ''"],
+    ["audiomack", "TEXT DEFAULT ''"],
+  ];
+  for (const [col, def] of extraCols) {
+    try {
+      await query(`ALTER TABLE tracks ADD COLUMN ${col} ${def}`);
+    } catch (_) {}
+  }
 
   const seeded = (await query("SELECT value FROM settings WHERE key='seeded'"))[0];
   if (!seeded) {
