@@ -87,7 +87,9 @@ fetch("/api/content")
         featCover.appendChild(img);
       }
       if (featured.audio && featAudio) {
+        featAudio.preload = "auto";
         featAudio.src = featured.audio;
+        featAudio.load();
       }
       if (featLinks) {
         const addLink = (url, label) => {
