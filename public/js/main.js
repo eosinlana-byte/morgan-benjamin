@@ -140,26 +140,31 @@ fetch("/api/content")
       };
     });
 
-    const quotes = data.testimonials || [];
-    const qBox = document.getElementById("quotes");
-    const qEmpty = document.getElementById("quotesEmpty");
-    if (qEmpty) qEmpty.style.display = quotes.length ? "none" : "block";
-    quotes.forEach((q) => {
-      if (!qBox) return;
+    const folio = data.works || [];
+    const fBox = document.getElementById("folio");
+    const fEmpty = document.getElementById("folioEmpty");
+    if (fEmpty) fEmpty.style.display = folio.length ? "none" : "block";
+    folio.forEach((item) => {
+      if (!fBox) return;
       const card = el("<article class='card'></article>");
-      if (q.image) {
+      const kind = (item.category || "image").toLowerCase();
+      if (kind !== "text" && item.image) {
         const img = document.createElement("img");
-        img.src = q.image;
-        img.alt = "";
+        img.src = item.image;
+        img.alt = item.title || "";
         card.appendChild(img);
       }
-      const p = document.createElement("p");
-      p.textContent = q.quote || "";
-      card.appendChild(p);
-      const h = document.createElement("h3");
-      h.textContent = [q.name, q.role].filter(Boolean).join(" · ");
-      card.appendChild(h);
-      qBox.appendChild(card);
+      if (item.title) {
+        const h = document.createElement("h3");
+        h.textContent = item.title;
+        card.appendChild(h);
+      }
+      if (kind === "text" && item.description) {
+        const p = document.createElement("p");
+        p.textContent = item.description;
+        card.appendChild(p);
+      }
+      fBox.appendChild(card);
     });
 
     ["socials", "socialsFoot"].forEach((id) => {
