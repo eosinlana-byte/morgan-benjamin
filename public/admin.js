@@ -524,8 +524,8 @@ async function renderSettings(c) {
   box.innerHTML = `<div class="panel__head"><h3>Settings</h3></div><div class="panel__body"></div>`;
   const f = document.createElement("form");
   f.innerHTML = `
-    <div class="field"><label>One line</label><input name="line" /></div>
-    <div class="field"><label>About</label><textarea name="text"></textarea></div>
+    <div class="field"><label>Heading</label><input name="line" /></div>
+    <div class="field"><label>Bio</label><textarea name="text"></textarea></div>
     <div class="field"><label>Instagram URL</label><input name="instagram" /></div>
     <div class="field"><label>Spotify URL</label><input name="spotify" /></div>
     <div class="field"><label>YouTube URL</label><input name="youtube" /></div>
