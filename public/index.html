@@ -281,15 +281,14 @@
           <a class="mail" href="mailto:morganbenj75@gmail.com">morganbenj75@gmail.com</a>
           <p id="socials"></p>
         </div>
-        <form class="form-card" id="cform" method="get" action="/api/contact">
+        <form class="form-card" id="cform" method="post" action="/api/contact">
           <div class="form-done" id="cdone">
             <p class="kicker">Enquiry received</p>
             <h3>I'll get back to you as soon as possible.</h3>
             <p>Your message is with me. If I need anything else, I'll write to the email you sent.</p>
           </div>
           <div class="form-fields">
-          <input name="website" class="hp" tabindex="-1" autocomplete="off" />
-          <input type="hidden" name="p" id="cpack" value="" />
+          <input name="hp_trap" class="hp" tabindex="-1" autocomplete="off" />
           <div>
             <label for="cname">Full Name <span class="req">*</span></label>
             <input id="cname" name="name" autocomplete="name" maxlength="120" required />
@@ -358,6 +357,6 @@
     <button class="play-btn" id="dockPlay" type="button">▶</button>
     <div><strong id="dockTitle">After the Rain</strong></div>
   </div>
-  <script src="js/main.js?v=13"></script>
+  <script src="js/main.js?v=14"></script>
 </body>
 </html>
