@@ -32,6 +32,9 @@ function toggleAudio() {
 if (featPlay) featPlay.onclick = toggleAudio;
 if (dockPlay) dockPlay.onclick = toggleAudio;
 if (featAudio) {
+  featAudio.controlsList = "nodownload noplaybackrate noremoteplayback";
+  featAudio.setAttribute("controlslist", "nodownload noplaybackrate noremoteplayback");
+  featAudio.oncontextmenu = (ev) => ev.preventDefault();
   featAudio.addEventListener("play", () => setPlayIcons(true));
   featAudio.addEventListener("pause", () => setPlayIcons(false));
 }
@@ -44,6 +47,25 @@ fetch("/api/content")
     if (about.photo) {
       const pic = document.getElementById("aboutPhoto");
       if (pic) pic.style.backgroundImage = "url(" + about.photo + ")";
+    }
+    if (about.line) {
+      const head = document.getElementById("aboutHeading");
+      if (head) head.textContent = about.line;
+    }
+    if (about.text) {
+      const box = document.getElementById("aboutBody");
+      if (box) {
+        box.innerHTML = "";
+        String(about.text)
+          .split(/\n+/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .forEach((para) => {
+            const p = document.createElement("p");
+            p.textContent = para;
+            box.appendChild(p);
+          });
+      }
     }
 
     const tracks = data.tracks || [];
@@ -118,6 +140,10 @@ fetch("/api/content")
         const a = document.createElement("audio");
         a.controls = true;
         a.preload = "none";
+        a.controlsList = "nodownload noplaybackrate noremoteplayback";
+        a.setAttribute("controlslist", "nodownload noplaybackrate noremoteplayback");
+        a.disablePictureInPicture = true;
+        a.oncontextmenu = (ev) => ev.preventDefault();
         a.src = t.audio;
         card.appendChild(a);
       }
