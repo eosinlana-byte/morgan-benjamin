@@ -117,8 +117,10 @@ app.get("/media/:id", async (req, res) => {
     const data = asBuffer(rows[0].data);
     const total = data.length;
     res.setHeader("Content-Type", rows[0].mime_type || "application/octet-stream");
+    res.setHeader("Content-Disposition", "inline");
     res.setHeader("Accept-Ranges", "bytes");
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.setHeader("X-Content-Type-Options", "nosniff");
     const range = req.headers.range;
     if (range) {
       const m = /^bytes=(\d*)-(\d*)$/.exec(range);
