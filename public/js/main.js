@@ -465,14 +465,9 @@ if (new URLSearchParams(location.search).get("sent") === "1") {
   if (history.replaceState) history.replaceState({}, "", "/#contact");
 }
 
-function packPayload(obj) {
-  const s = btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
-  return s.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
 const form = document.getElementById("cform");
 if (form) {
-  form.addEventListener("submit", (e) => {
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const f = e.target;
     const msg = document.getElementById("cmsg");
@@ -481,22 +476,36 @@ if (form) {
       msg.textContent = "Sending…";
     }
     const rawPhone = (f.phone.value || "").trim();
-    const phone = rawPhone ? (f.dial.value + " " + rawPhone) : "";
-    const payload = {
+    const phone = rawPhone ? ((f.dial && f.dial.value ? f.dial.value + " " : "") + rawPhone) : "";
+    const params = new URLSearchParams({
       name: f.name.value,
       email: f.email.value,
       phone,
       service: f.service.value,
       subject: f.subject.value,
       message: f.message.value,
-      website: f.website.value,
-    };
-    const pack = document.getElementById("cpack");
-    if (pack) pack.value = packPayload(payload);
-    Array.from(f.elements).forEach((el) => {
-      if (el.name && el.name !== "p") el.disabled = true;
+      hp_trap: f.hp_trap ? f.hp_trap.value : "",
     });
-    f.method = "get";
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+        },
+        body: params,
+      });
+      const data = await res.json().catch(() => null);
+      if (data && data.success) {
+        showEnquiryReceived();
+        return;
+      }
+      if (data && data.error) {
+        if (msg) msg.textContent = data.error;
+        return;
+      }
+    } catch (_) {}
+    f.method = "post";
     f.action = "/api/contact";
     f.submit();
   });
