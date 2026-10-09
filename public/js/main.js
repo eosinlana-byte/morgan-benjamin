@@ -67,15 +67,24 @@ fetch("/api/content")
       if (featured.audio && featAudio) {
         featAudio.src = featured.audio;
       }
-      if (featured.links && featLinks) {
-        featured.links.split(/\s+/).filter(Boolean).forEach((url) => {
+      if (featLinks) {
+        const addLink = (url, label) => {
+          if (!url) return;
           const a = document.createElement("a");
           a.href = url;
           a.target = "_blank";
           a.rel = "noopener";
-          a.textContent = "Listen";
+          a.textContent = label;
           featLinks.appendChild(a);
-        });
+        };
+        if (featured.youtube_id) addLink("https://www.youtube.com/watch?v=" + featured.youtube_id, "Listen");
+        addLink(featured.spotify, "Spotify");
+        addLink(featured.apple, "Apple");
+        addLink(featured.youtube, "YouTube");
+        addLink(featured.audiomack, "Audiomack");
+        if (!featLinks.children.length && featured.links) {
+          featured.links.split(/\s+/).filter(Boolean).forEach((url) => addLink(url, "Listen"));
+        }
       }
     }
 
